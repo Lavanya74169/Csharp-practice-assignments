@@ -1,0 +1,159 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Collections.Concurrent;
+ 
+class Program
+{
+    static async Task Main()
+{
+    Assignment1();
+    Assignment2();
+    Assignment3();
+    await Assignment4();  
+    Assignment5();
+}
+ 
+ 
+    static void Assignment1()
+    {
+        Console.WriteLine("\n--- Assignment 1: Search with Cancellation ---");
+        string[] lines = File.ReadAllLines("sample.txt");
+        string searchTerm = "Copilot";
+        int segmentSize = lines.Length / 4;
+ 
+        var cts = new CancellationTokenSource();
+        var token = cts.Token;
+ 
+        Task[] tasks = new Task[4];
+        for (int i = 0; i < 4; i++)
+        {
+            int start = i * segmentSize;
+            int end = (i == 3) ? lines.Length : start + segmentSize;
+ 
+            tasks[i] = Task.Run(() =>
+            {
+                for (int j = start; j < end; j++)
+                {
+                    if (token.IsCancellationRequested) return;
+                    if (lines[j].Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine($"Found '{searchTerm}' at line {j} by Task {Task.CurrentId}");
+                        cts.Cancel();
+                        return;
+                    }
+                }
+            }, token);
+        }
+        Task.WaitAll(tasks);
+    }
+ 
+    static void Assignment2()
+    {
+        Console.WriteLine("\n--- Assignment 2: Search and Count Occurrences ---");
+        string[] lines = File.ReadAllLines("sample.txt");
+        string searchTerm = "Copilot";
+        int segmentSize = lines.Length / 4;
+ 
+        int totalCount = 0;
+        object lockObj = new object();
+ 
+        Task[] tasks = new Task[4];
+        for (int i = 0; i < 4; i++)
+        {
+            int start = i * segmentSize;
+            int end = (i == 3) ? lines.Length : start + segmentSize;
+ 
+            tasks[i] = Task.Run(() =>
+            {
+                int localCount = 0;
+                for (int j = start; j < end; j++)
+                {
+                    if (lines[j].Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+                        localCount++;
+                }
+                lock (lockObj)
+                {
+                    totalCount += localCount;
+                }
+            });
+        }
+        Task.WaitAll(tasks);
+        Console.WriteLine($"Total occurrences: {totalCount}");
+    }
+ 
+    static void Assignment3()
+    {
+        Console.WriteLine("\n--- Assignment 3: Barrier Synchronization ---");
+        var barrier = new Barrier(4, b => Console.WriteLine($"Pass {b.CurrentPhaseNumber} completed"));
+ 
+        Task[] tasks = new Task[4];
+        for (int i = 0; i < 4; i++)
+        {
+            tasks[i] = Task.Run(() =>
+            {
+                for (int pass = 0; pass < 3; pass++)
+                {
+                    Console.WriteLine($"Task {Task.CurrentId} working on pass {pass}");
+                    Thread.Sleep(200);
+                    barrier.SignalAndWait();
+                }
+            });
+        }
+        Task.WaitAll(tasks);
+    }
+ 
+    static async Task Assignment4()
+    {
+        Console.WriteLine("\n--- Assignment 4: Limit Concurrent Connections ---");
+        var semaphore = new SemaphoreSlim(5);
+ 
+        var tasks = Enumerable.Range(1, 100).Select(async i =>
+        {
+            await semaphore.WaitAsync();
+            try
+            {
+                Console.WriteLine($"Processing DB task {i}");
+                await Task.Delay(100);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        }).ToArray();
+ 
+        await Task.WhenAll(tasks);
+    }
+ 
+    static void Assignment5()
+    {
+        Console.WriteLine("\n--- Assignment 5: Task vs ValueTask ---");
+ 
+        Console.WriteLine("Task: always allocates, good for long-running async operations.");
+        Console.WriteLine("ValueTask: avoids allocation if result is already available synchronously.");
+ 
+        var cache = new ConcurrentDictionary<string, string>();
+        cache["key1"] = "cached result";
+ 
+        ValueTask<string> GetCachedValueAsync(string key)
+        {
+            if (cache.TryGetValue(key, out var value))
+            {
+                return new ValueTask<string>(value);
+            }
+            else
+            {
+                return new ValueTask<string>(Task.Run(() =>
+                {
+                    Thread.Sleep(100);
+                    return "loaded from DB";
+                }));
+            }
+        }
+ 
+        var result = GetCachedValueAsync("key1").Result;
+        Console.WriteLine($"ValueTask result: {result}");
+    }
+}
