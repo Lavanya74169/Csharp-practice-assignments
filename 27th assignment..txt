@@ -1,0 +1,146 @@
+//27th assignment.
+using System;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace AsyncAssignmentsDemo
+{
+    class Program
+    {
+        static async Task Main(string[] args)
+        {
+            Console.WriteLine("==== Assignment 1: Async File Read ====");
+            await Assignment1_ReadFileAsync();
+
+            Console.WriteLine("\n==== Assignment 3: Task.WhenAll (Simulated Network Calls) ====");
+            await Assignment3_TaskWhenAll();
+
+            Console.WriteLine("\n==== Assignment 4: Task Cancellation ====");
+            await Assignment4_Cancellation();
+
+            Console.WriteLine("\n==== Assignment 5: Sync to Async + Explanations ====");
+            await Assignment5_SyncToAsync();
+
+            Console.WriteLine("\nAll assignments completed. Press any key to exit.");
+            Console.ReadKey();
+        }
+
+     
+        static async Task Assignment1_ReadFileAsync()
+        {
+            string filePath = "sample.txt";
+
+            // Create sample large file if not exists
+            if (!File.Exists(filePath))
+            {
+                var lines = Enumerable.Range(1, 10000)
+                                      .Select(i => $"This is line {i}");
+                object value = await File.WriteAllLinesAsync(filePath, lines);
+            }
+
+            Console.WriteLine("Reading file asynchronously...");
+
+            string content = await File.ReadAllTextAsync(filePath);
+
+            int lineCount = content.Split('\n').Length;
+
+            Console.WriteLine($"Number of lines: {lineCount}");
+            Console.WriteLine("UI/Console was NOT blocked while reading.");
+        }
+
+        
+        static async Task Assignment3_TaskWhenAll()
+        {
+            Task<string> fetch1 = FetchFromServerAsync("Server A", 2000);
+            Task<string> fetch2 = FetchFromServerAsync("Server B", 3000);
+            Task<string> fetch3 = FetchFromServerAsync("Server C", 1500);
+
+            Console.WriteLine("Fetching data concurrently...");
+
+            string[] results = await Task.WhenAll(fetch1, fetch2, fetch3);
+
+            Console.WriteLine("All fetch operations completed!");
+
+            foreach (var result in results)
+            {
+                Console.WriteLine(result);
+            }
+        }
+
+        static async Task<string> FetchFromServerAsync(string serverName, int delayMs)
+        {
+            await Task.Delay(delayMs); // Simulate network latency
+            return $"Data received from {serverName} after {delayMs}ms";
+        }
+
+        static async Task Assignment4_Cancellation()
+        {
+            using CancellationTokenSource cts = new CancellationTokenSource();
+
+            Task longRunningTask = Task.Run(async () =>
+            {
+                int i = 0;
+                while (true)
+                {
+                    if (cts.Token.IsCancellationRequested)
+                    {
+                        Console.WriteLine("Cancellation requested. Cleaning up...");
+                        break;
+                    }
+
+                    Console.WriteLine($"Working... {i++}");
+                    await Task.Delay(500);
+                }
+            });
+
+            // Cancel after 2 seconds
+            await Task.Delay(2000);
+            Console.WriteLine("Main thread requesting cancellation...");
+            cts.Cancel();
+
+            await longRunningTask;
+            Console.WriteLine("Long running task stopped gracefully.");
+        }
+
+        
+        static async Task Assignment5_SyncToAsync()
+        {
+            Console.WriteLine("Calling async method correctly using await...");
+            string result = await GetDataAsync();
+            Console.WriteLine(result);
+
+        
+
+            Console.WriteLine("\nDeadlock Note:");
+            Console.WriteLine(".Result or .Wait() can cause deadlock in UI apps (WinForms/WPF/ASP.NET).");
+            Console.WriteLine("Always prefer await.");
+
+            Console.WriteLine("\n--- Explanations ---");
+
+            Console.WriteLine("\nTask.Run:");
+            Console.WriteLine("- Runs work on a ThreadPool thread.");
+            Console.WriteLine("- Used for CPU-bound work.");
+            Console.WriteLine("- Example: Task.Run(() => DoHeavyCalculation());");
+
+            Console.WriteLine("\nasync/await:");
+            Console.WriteLine("- Used for I/O-bound operations.");
+            Console.WriteLine("- Does NOT create new thread automatically.");
+            Console.WriteLine("- Frees thread while waiting for I/O.");
+            Console.WriteLine("- Example: await File.ReadAllTextAsync(path);");
+
+            Console.WriteLine("\nValueTask:");
+            Console.WriteLine("- Similar to Task but optimized.");
+            Console.WriteLine("- Used when result is often already available.");
+            Console.WriteLine("- Reduces memory allocations.");
+            Console.WriteLine("- Mostly for advanced/high-performance scenarios.");
+        }
+
+        static async Task<string> GetDataAsync()
+        {
+            await Task.Delay(1000);
+            return "Async data received successfully!";
+        }
+    }
+}
